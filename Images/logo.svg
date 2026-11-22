@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 64">
+  <!-- Logo complet : icône + nom "foot.status" -->
+  <defs>
+    <linearGradient id="fond" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101827"/>
+      <stop offset="0.6" stop-color="#182846"/>
+      <stop offset="1" stop-color="#315cf5"/>
+    </linearGradient>
+    <clipPath id="ballon"><circle cx="30" cy="35" r="17"/></clipPath>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#fond)"/>
+  <circle cx="30" cy="35" r="17" fill="#ffffff"/>
+  <path d="M30 26.5l7.6 5.5-2.9 8.9h-9.4l-2.9-8.9z" fill="#14171c"/>
+  <path d="M30 18v8.5M37.6 32l8.2-2.6M34.7 40.9l5 6.9M25.3 40.9l-5 6.9M22.4 32l-8.2-2.6"
+        stroke="#14171c" stroke-width="2.2" stroke-linecap="round" clip-path="url(#ballon)"/>
+  <circle cx="49" cy="15" r="9" fill="#101827"/>
+  <circle cx="49" cy="15" r="6" fill="#22c55e"/>
+  <text x="80" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif"
+        font-size="36" font-weight="800" letter-spacing="-1.5" fill="#14171c">foot<tspan fill="#22c55e">.</tspan><tspan fill="#315cf5">status</tspan></text>
+</svg>

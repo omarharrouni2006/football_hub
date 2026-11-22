@@ -1,6 +1,6 @@
 {
-  "name": "Planète Foot",
-  "short_name": "Planète Foot",
+  "name": "foot.status",
+  "short_name": "foot.status",
   "description": "Les infos et l'actualité de tous les footballeurs du monde.",
   "start_url": "./index.html",
   "display": "standalone",

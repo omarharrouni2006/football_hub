@@ -4,7 +4,7 @@
 // =============================================
 const TEXTES = {
     fr: {
-        marque: "Planète Foot",
+        marque: "foot.status",
         accueil: "Accueil",
         parametres: "Paramètres",
         fermer: "Fermer",
@@ -70,7 +70,7 @@ const TEXTES = {
         droit: "Droit", gauche: "Gauche", lesDeux: "Les deux"
     },
     en: {
-        marque: "Planète Foot",
+        marque: "foot.status",
         accueil: "Home",
         parametres: "Settings",
         fermer: "Close",

@@ -1,6 +1,6 @@
-# ⚽ Planète Foot
+<img src="Images/logo.svg" alt="foot.status" width="300">
 
-**Planète Foot** est un site qui regroupe les infos et l'actualité des footballeurs du monde entier, d'aujourd'hui et d'hier.
+**foot.status** est un site qui regroupe les infos et l'actualité des footballeurs du monde entier, d'aujourd'hui et d'hier.
 Il marche sur ordinateur **et** sur téléphone.
 
 🔗 **Voir le site en ligne : https://omarharrouni2006.github.io/football_hub/**
@@ -36,7 +36,7 @@ Planete_Foot/
 │   │   ├── api.ts          la récupération des données sur Internet
 │   │   └── app.ts          le fonctionnement des pages
 │   └── Javascript/         créé automatiquement à partir du TypeScript
-├── Images/                 l'icône du site et l'image par défaut
+├── Images/                 le logo, l'icône du site et l'image par défaut
 ├── package.json            pour installer TypeScript
 └── tsconfig.json           réglages de TypeScript
 ```

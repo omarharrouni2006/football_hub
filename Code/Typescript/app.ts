@@ -1,5 +1,5 @@
 // =============================================
-//  Planète Foot : fonctionnement du site
+//  foot.status : fonctionnement du site
 // =============================================
 // Le site n'a qu'une seule page (index.html).
 // On change le contenu de <main> selon l'adresse après le # :

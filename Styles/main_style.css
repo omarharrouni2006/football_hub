@@ -1,5 +1,5 @@
 /* =============================================
-   Planète Foot : styles du site
+   foot.status : styles du site
    ============================================= */
 
 /* ---------- Couleurs du thème clair ---------- */
@@ -116,6 +116,20 @@ h1, h2, h3 {
 
 .logo img {
   border-radius: 8px;
+}
+
+/* Nom du site : foot.status */
+.nom-site {
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.nom-site .point {
+  color: #22c55e;
+}
+
+.nom-site .status {
+  color: var(--bleu);
 }
 
 .petite-recherche {
