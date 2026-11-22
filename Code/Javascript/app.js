@@ -1,615 +1,570 @@
 "use strict";
-/* Planète Foot — application principale (TypeScript)
-   Routes : #            -> accueil
-            #recherche/q -> résultats de recherche
-            #joueur/id   -> fiche d'un joueur */
-const IMG = "https://r2.thesportsdb.com/images/media/player/thumb/";
-/* Instantané local : la page d'accueil s'affiche tout de suite, puis
-   chaque carte est mise à jour avec les données en ligne. */
-const FEATURED = [
-    { id: "34162098", name: "Kylian Mbappé", team: "Real Madrid", nat: "France", pos: "Centre-Forward", born: "1998-12-20", thumb: IMG + "v08cj31778816426.jpg" },
-    { id: "34219490", name: "Lamine Yamal", team: "Barcelona", nat: "Spain", pos: "Right Winger", born: "2007-07-13", thumb: IMG + "cdjnqt1786385175.jpg" },
-    { id: "34146370", name: "Lionel Messi", team: "Inter Miami", nat: "Argentina", pos: "Right Winger", born: "1987-06-24", thumb: IMG + "kpfsvp1725295651.jpg" },
-    { id: "34146304", name: "Cristiano Ronaldo", team: "Al-Nassr", nat: "Portugal", pos: "Centre-Forward", born: "1985-02-05", thumb: IMG + "bkre241600892282.jpg" },
-    { id: "34169116", name: "Erling Haaland", team: "Manchester City", nat: "Norway", pos: "Centre-Forward", born: "2000-07-21", thumb: IMG + "bb1agj1727415216.jpg" },
-    { id: "34161324", name: "Vinícius Júnior", team: "Real Madrid", nat: "Brazil", pos: "Left Wing", born: "2000-07-12", thumb: IMG + "lxf1he1771264845.jpg" },
-    { id: "34146220", name: "Harry Kane", team: "Bayern Munich", nat: "England", pos: "Centre-Forward", born: "1993-07-28", thumb: IMG + "0w9up71770542636.jpg" },
-    { id: "34161947", name: "Achraf Hakimi", team: "Paris SG", nat: "Morocco", pos: "Right-Back", born: "1998-11-04", thumb: IMG + "lwhwh71770216476.jpg" }
-];
-const RANDOM_POOL = FEATURED.map((p) => p.id).concat([
-    "34171882", // Jude Bellingham
-    "34161375", // Ousmane Dembélé
-    "34178205" // Khvicha Kvaratskhelia
-]);
-/* ---------- État et préférences ---------- */
-const store = {
-    get(key) {
-        try {
-            return localStorage.getItem(key);
-        }
-        catch (e) {
-            return null;
-        }
-    },
-    set(key, value) {
-        try {
-            localStorage.setItem(key, value);
-        }
-        catch (e) { /* ignore */ }
+// =============================================
+//  Planète Foot : fonctionnement du site
+// =============================================
+// Le site n'a qu'une seule page (index.html).
+// On change le contenu de <main> selon l'adresse après le # :
+//   #                   -> page d'accueil
+//   #recherche-mbappe   -> résultats de recherche
+//   #joueur-34162098    -> fiche d'un joueur
+// Langue et thème choisis (on les retrouve au prochain passage)
+let langue = lirePreference("langue", "fr");
+let theme = lirePreference("theme", "auto");
+// Pour arrêter l'horloge quand on quitte l'accueil
+let horloge = 0;
+// ---------- Petites fonctions utiles ----------
+// Renvoie le texte dans la bonne langue
+function texte(cle) {
+    return TEXTES[langue][cle] || TEXTES.fr[cle] || cle;
+}
+// Empêche un texte venant de l'API d'être lu comme du HTML
+function proteger(valeur) {
+    if (valeur === null || valeur === undefined)
+        return "";
+    return String(valeur)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+function lirePreference(nom, parDefaut) {
+    try {
+        return localStorage.getItem(nom) || parDefaut;
     }
-};
-let lang = store.get("pf-lang") === "en" ? "en" : "fr";
-let theme = store.get("pf-theme") || "auto";
-let clockTimer;
-/* ---------- Outils ---------- */
-function t(key, vars) {
-    let s = I18N[lang][key] ?? I18N.fr[key] ?? key;
-    if (vars)
-        Object.keys(vars).forEach((k) => { s = s.replace("{" + k + "}", String(vars[k])); });
-    return s;
+    catch (e) {
+        return parDefaut;
+    }
 }
-function esc(v) {
-    return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function sauverPreference(nom, valeur) {
+    try {
+        localStorage.setItem(nom, valeur);
+    }
+    catch (e) {
+        // pas grave
+    }
 }
-function $(sel, root = document) {
-    return root.querySelector(sel);
+function formatLangue() {
+    return langue === "fr" ? "fr-FR" : "en-GB";
 }
-function locale() { return lang === "fr" ? "fr-FR" : "en-GB"; }
-function weightLabel(w) {
-    if (!w)
+// Âge à partir de la date de naissance (et de la date de décès si besoin)
+function calculerAge(naissance, deces) {
+    if (!naissance)
+        return null;
+    const debut = new Date(naissance);
+    const fin = deces ? new Date(deces) : new Date();
+    let age = fin.getFullYear() - debut.getFullYear();
+    // Si l'anniversaire n'est pas encore passé cette année, on enlève 1
+    const anniversairePasse = fin.getMonth() > debut.getMonth() ||
+        (fin.getMonth() === debut.getMonth() && fin.getDate() >= debut.getDate());
+    if (!anniversairePasse)
+        age = age - 1;
+    return age;
+}
+// "1998-12-20" -> "20 décembre 1998"
+function formaterDate(date) {
+    if (!date)
         return "—";
-    const kg = w.match(/(\d+(?:[.,]\d+)?)\s*kg/i);
+    return new Date(date).toLocaleDateString(formatLangue(), { day: "numeric", month: "long", year: "numeric" });
+}
+// Date et heure d'un match (l'API donne l'heure en temps universel)
+function dateDuMatch(match) {
+    let date;
+    if (match.strTimestamp) {
+        date = new Date(match.strTimestamp + "Z");
+    }
+    else {
+        date = new Date(match.dateEvent);
+    }
+    const jour = date.toLocaleDateString(formatLangue(), { weekday: "short", day: "numeric", month: "short" });
+    const heure = date.toLocaleTimeString(formatLangue(), { hour: "2-digit", minute: "2-digit" });
+    return jour + " · " + heure;
+}
+function nomPays(pays) {
+    if (!pays)
+        return "—";
+    const infos = PAYS[pays];
+    if (!infos)
+        return pays;
+    const nom = langue === "fr" ? infos[0] : pays.replace("The ", "");
+    return infos[1] + " " + nom;
+}
+function nomPoste(poste) {
+    if (!poste)
+        return "—";
+    if (langue === "fr" && POSTES[poste])
+        return POSTES[poste];
+    return poste;
+}
+// Statut du joueur : en activité, retraité, décédé...
+function statutJoueur(joueur) {
+    const statut = joueur.strStatus || "";
+    if (statut === "Active")
+        return texte("actif");
+    if (statut === "Retired")
+        return texte("retraite");
+    if (statut === "Deceased")
+        return texte("decede");
+    if (statut === "Free Agent")
+        return texte("libre");
+    if (statut === "Coaching")
+        return texte("entraineur");
+    return statut || "—";
+}
+// Un joueur a-t-il un vrai club ? (l'API met "_Retired Soccer" pour les retraités)
+function aUnClub(joueur) {
+    return Boolean(joueur.strTeam && joueur.strTeam.charAt(0) !== "_" && joueur.idTeam);
+}
+function nomEquipe(joueur) {
+    return aUnClub(joueur) ? joueur.strTeam : statutJoueur(joueur);
+}
+function piedFort(cote) {
+    if (cote === "Right")
+        return texte("droit");
+    if (cote === "Left")
+        return texte("gauche");
+    if (cote === "Both")
+        return texte("lesDeux");
+    return cote || "—";
+}
+// "163 lb (74 kg)" -> "74 kg"   et   "148 lbs" -> "67 kg"
+function poidsEnKg(poids) {
+    if (!poids)
+        return "—";
+    const kg = poids.match(/(\d+)\s*kg/);
     if (kg)
         return kg[1] + " kg";
-    const lb = w.match(/(\d+(?:[.,]\d+)?)\s*lb/i);
-    if (lb)
-        return Math.round(parseFloat(lb[1].replace(",", ".")) * 0.4536) + " kg";
-    return w;
+    const livres = poids.match(/(\d+)\s*lb/);
+    if (livres)
+        return Math.round(Number(livres[1]) * 0.4536) + " kg";
+    return poids;
 }
-function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
-function ageFrom(date) {
-    if (!date)
-        return null;
-    const b = new Date(date + "T00:00:00");
-    if (isNaN(b.getTime()))
-        return null;
-    const n = new Date();
-    let a = n.getFullYear() - b.getFullYear();
-    if (n.getMonth() < b.getMonth() || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate()))
-        a--;
-    return a;
-}
-function formatDate(date) {
-    if (!date)
+// "1.78 m (5 ft 10 in)" -> "1.78 m"
+function tailleEnMetres(taille) {
+    if (!taille)
         return "—";
-    const d = new Date(date + "T00:00:00");
-    return isNaN(d.getTime()) ? date : new Intl.DateTimeFormat(locale(), { day: "numeric", month: "long", year: "numeric" }).format(d);
+    return taille.split("(")[0].trim();
 }
-function eventDate(e) {
-    const raw = e.strTimestamp
-        ? e.strTimestamp.replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(e.strTimestamp) ? "" : "Z")
-        : e.dateEvent ? e.dateEvent + "T" + (e.strTime || "00:00:00") + "Z" : "";
-    const d = new Date(raw);
-    return isNaN(d.getTime()) ? null : d;
+function chargement() {
+    return '<p class="chargement"><span class="rond"></span>' + texte("chargement") + "</p>";
 }
-function formatEventDate(e, withTime) {
-    const d = eventDate(e);
-    if (!d)
-        return e.dateEvent || "";
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const day = new Date(d);
-    day.setHours(0, 0, 0, 0);
-    const diff = Math.round((day.getTime() - today.getTime()) / 86400000);
-    const time = new Intl.DateTimeFormat(locale(), { hour: "2-digit", minute: "2-digit" }).format(d);
-    let label;
-    if (diff === 0)
-        label = t("today");
-    else if (diff === 1)
-        label = t("tomorrow");
-    else
-        label = new Intl.DateTimeFormat(locale(), { weekday: "short", day: "numeric", month: "short" }).format(d);
-    label = capitalize(label);
-    return withTime ? label + " · " + time : label;
-}
-function relativeTime(ts) {
-    const sec = Math.round((Date.now() - ts) / 1000);
-    if (sec < 45)
-        return t("justNow");
-    const rtf = new Intl.RelativeTimeFormat(locale(), { numeric: "auto" });
-    if (sec < 3600)
-        return rtf.format(-Math.round(sec / 60), "minute");
-    if (sec < 86400)
-        return rtf.format(-Math.round(sec / 3600), "hour");
-    return rtf.format(-Math.round(sec / 86400), "day");
-}
-function positionLabel(pos) {
-    if (!pos)
-        return "—";
-    return lang === "fr" ? (POSITIONS_FR[pos] || pos) : pos;
-}
-function flag(country) {
-    if (!country)
-        return "";
-    if (COUNTRY_FLAG_EXTRA[country])
-        return COUNTRY_FLAG_EXTRA[country];
-    const code = COUNTRY_CODES[country];
-    if (!code)
-        return "";
-    return code.toUpperCase().replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0)));
-}
-function countryLabel(country) {
-    if (!country)
-        return "—";
-    if (lang === "fr" && COUNTRY_FR_EXTRA[country])
-        return COUNTRY_FR_EXTRA[country];
-    const code = COUNTRY_CODES[country];
-    if (code && typeof Intl !== "undefined" && "DisplayNames" in Intl) {
-        try {
-            const dn = new Intl.DisplayNames([locale()], { type: "region" });
-            return dn.of(code) || country;
-        }
-        catch (e) { /* ignore */ }
+// ---------- Carte d'un joueur (accueil et recherche) ----------
+function carteJoueur(joueur, estLegende) {
+    let detail = nomPoste(joueur.poste);
+    if (estLegende) {
+        detail += " · " + joueur.naissance.substring(0, 4);
     }
-    return country;
-}
-function footLabel(side) {
-    if (!side)
-        return "—";
-    const s = side.toLowerCase();
-    if (s.indexOf("right") === 0)
-        return t("right");
-    if (s.indexOf("left") === 0)
-        return t("left");
-    if (s.indexOf("both") === 0)
-        return t("both");
-    return side;
-}
-function statusLabel(st) {
-    if (!st)
-        return "—";
-    const s = st.toLowerCase();
-    if (s === "active")
-        return t("active");
-    if (s === "retired")
-        return t("retired");
-    if (s.indexOf("free") === 0)
-        return t("freeAgent");
-    return st;
-}
-function initials(name) {
-    return name.split(/\s+/).map((w) => w.charAt(0)).slice(0, 2).join("").toUpperCase();
-}
-function small(url) {
-    return url ? url + "/small" : "";
-}
-function photoHTML(url, name, cls) {
-    if (!url)
-        return `<span class="${cls} avatar-fallback" aria-hidden="true">${esc(initials(name))}</span>`;
-    return `<img class="${cls}" src="${esc(small(url))}" data-full="${esc(url)}" alt="${esc(name)}" loading="lazy" width="250" height="250">`;
-}
-/* Si la miniature "/small" n'existe pas, on charge l'image complète, sinon les initiales. */
-document.addEventListener("error", (ev) => {
-    const img = ev.target;
-    if (!(img instanceof HTMLImageElement))
-        return;
-    const full = img.getAttribute("data-full");
-    if (full && img.src !== full) {
-        img.src = full;
-        img.removeAttribute("data-full");
-        return;
+    else {
+        const age = calculerAge(joueur.naissance);
+        if (age !== null)
+            detail += " · " + age + " " + texte("ans");
     }
-    if (img.classList.contains("badge")) {
-        img.remove();
-        return;
-    }
-    const span = document.createElement("span");
-    span.className = img.className + " avatar-fallback";
-    span.textContent = initials(img.alt || "?");
-    img.replaceWith(span);
-}, true);
-/* ---------- Thème et langue ---------- */
-function applyTheme(choice) {
-    theme = choice;
-    store.set("pf-theme", choice);
-    const root = document.documentElement;
-    if (choice === "auto")
-        root.removeAttribute("data-theme");
-    else
-        root.setAttribute("data-theme", choice);
-    const dark = choice === "dark" || (choice === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta)
-        meta.setAttribute("content", dark ? "#0b0f16" : "#101827");
-}
-function applyLang(l) {
-    lang = l;
-    store.set("pf-lang", l);
-    document.documentElement.lang = l;
-    document.querySelectorAll("[data-i18n]").forEach((el) => {
-        el.textContent = t(el.getAttribute("data-i18n"));
-    });
-    document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
-        el.placeholder = t(el.getAttribute("data-i18n-placeholder"));
-    });
-    document.querySelectorAll("[data-i18n-aria]").forEach((el) => {
-        el.setAttribute("aria-label", t(el.getAttribute("data-i18n-aria")));
-    });
-}
-/* ---------- Panneau des paramètres ---------- */
-function setupSettings() {
-    const sheet = $("#settings");
-    const backdrop = $("#settingsBackdrop");
-    const openBtn = $("#openSettings");
-    const open = () => {
-        sheet.querySelector(`input[name="theme"][value="${theme}"]`).checked = true;
-        sheet.querySelector(`input[name="lang"][value="${lang}"]`).checked = true;
-        sheet.hidden = false;
-        backdrop.hidden = false;
-        requestAnimationFrame(() => { sheet.classList.add("open"); backdrop.classList.add("open"); });
-        $("#closeSettings").focus();
-    };
-    const close = () => {
-        sheet.classList.remove("open");
-        backdrop.classList.remove("open");
-        setTimeout(() => { sheet.hidden = true; backdrop.hidden = true; }, 250);
-        openBtn.focus();
-    };
-    openBtn.addEventListener("click", open);
-    $("#closeSettings").addEventListener("click", close);
-    backdrop.addEventListener("click", close);
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !sheet.hidden)
-        close(); });
-    sheet.addEventListener("change", (e) => {
-        const input = e.target;
-        if (input.name === "theme")
-            applyTheme(input.value);
-        if (input.name === "lang") {
-            applyLang(input.value);
-            route();
-        }
-    });
-    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-        if (theme === "auto")
-            applyTheme("auto");
-    });
-}
-/* ---------- Notification discrète (limite de requêtes) ---------- */
-function setupStatus() {
-    const toast = $("#statusToast");
-    let hideTimer;
-    API.onStatus((s) => {
-        if (s === "rate") {
-            toast.textContent = t("rateLimited");
-            toast.hidden = false;
-            window.clearTimeout(hideTimer);
-        }
-        else if (!toast.hidden) {
-            hideTimer = window.setTimeout(() => { toast.hidden = true; }, 600);
-        }
-    });
-}
-/* ---------- Recherche ---------- */
-function goSearch(q) {
-    q = q.trim();
-    if (q.length < 2)
-        return;
-    location.hash = "recherche/" + encodeURIComponent(q);
-}
-function bindSearchForm(form) {
-    form.addEventListener("submit", (e) => {
-        e.preventDefault();
-        const input = form.querySelector("input");
-        goSearch(input.value);
-        input.blur();
-    });
-}
-/* ---------- Vues ---------- */
-const main = () => $("#main");
-function playerCard(p) {
-    const age = ageFrom(p.born);
+    let equipe = joueur.equipe;
+    if (estLegende && equipe === "")
+        equipe = "⭐ " + texte("legende");
     return `
     <li>
-      <a class="player-card" href="#joueur/${esc(p.id)}" data-card="${esc(p.id)}">
-        ${photoHTML(p.thumb, p.name, "card-photo")}
-        <span class="card-body">
-          <span class="card-name">${esc(p.name)}</span>
-          <span class="card-team">${esc(p.team || "—")}</span>
-          <span class="card-meta">
-            <span>${flag(p.nat)} ${esc(countryLabel(p.nat))}</span>
-            <span>${esc(positionLabel(p.pos))}${age !== null ? " · " + esc(t("years", { n: age })) : ""}</span>
-          </span>
+      <a class="carte" href="#joueur-${proteger(joueur.id)}">
+        <img src="${proteger(joueur.photo || "Images/joueur.svg")}" alt="${proteger(joueur.nom)}"
+             loading="lazy" onerror="this.src='Images/joueur.svg'">
+        <span class="carte-texte">
+          <strong>${proteger(joueur.nom)}</strong>
+          <span class="carte-equipe">${proteger(equipe)}</span>
+          <span class="carte-detail">${proteger(nomPays(joueur.pays))}</span>
+          <span class="carte-detail">${proteger(detail)}</span>
         </span>
       </a>
     </li>`;
 }
-function renderHome() {
-    document.body.classList.add("is-home");
-    document.title = t("brand");
-    main().innerHTML = `
-    <section class="hero">
-      <div class="hero-top">
-        <span class="kicker">${esc(t("heroKicker"))}</span>
-        <time id="clock" class="clock"></time>
+// ---------- Page d'accueil ----------
+function afficherAccueil() {
+    document.body.classList.add("accueil");
+    document.title = texte("marque");
+    let cartesUne = "";
+    for (const joueur of JOUEURS_A_LA_UNE) {
+        cartesUne += carteJoueur(joueur, false);
+    }
+    let cartesLegendes = "";
+    for (const joueur of LEGENDES) {
+        cartesLegendes += carteJoueur(joueur, true);
+    }
+    contenu().innerHTML = `
+    <section class="bandeau">
+      <div class="bandeau-haut">
+        <span class="surtitre">${texte("surtitre")}</span>
+        <span id="horloge" class="horloge"></span>
       </div>
-      <h1>${esc(t("heroTitle"))}</h1>
-      <p>${esc(t("heroText"))}</p>
-      <form class="hero-search" id="heroSearch" role="search">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input type="search" name="q" autocomplete="off" placeholder="${esc(t("searchPlaceholder"))}" aria-label="${esc(t("searchBtn"))}">
-        <button type="submit">${esc(t("searchBtn"))}</button>
+      <h1>${texte("titre")}</h1>
+      <p>${texte("soustitre")}</p>
+      <form class="grande-recherche" id="rechercheAccueil">
+        <input type="search" name="nom" placeholder="${texte("placeholder")}" aria-label="${texte("rechercher")}">
+        <button type="submit">${texte("rechercher")}</button>
       </form>
-      <a href="#" class="random-link" id="randomPlayer">${esc(t("random"))}</a>
+      <a href="#" class="lien-hasard" id="lienHasard">${texte("hasard")} ↗</a>
     </section>
 
     <section class="section">
-      <div class="section-head">
-        <h2>${esc(t("featured"))}</h2>
-        <p>${esc(t("featuredSub"))}</p>
-      </div>
-      <ul class="player-grid">${FEATURED.map((p) => playerCard(p)).join("")}</ul>
+      <h2>${texte("aLaUne")}</h2>
+      <p class="sous-titre">${texte("aLaUneTexte")}</p>
+      <ul class="grille">${cartesUne}</ul>
     </section>
 
     <section class="section">
-      <div class="section-head"><h2>${esc(t("howTitle"))}</h2></div>
-      <ol class="steps">
-        <li><span class="step-num">1</span><h3>${esc(t("how1t"))}</h3><p>${esc(t("how1"))}</p></li>
-        <li><span class="step-num">2</span><h3>${esc(t("how2t"))}</h3><p>${esc(t("how2"))}</p></li>
-        <li><span class="step-num">3</span><h3>${esc(t("how3t"))}</h3><p>${esc(t("how3"))}</p></li>
-      </ol>
+      <h2>${texte("legendes")}</h2>
+      <p class="sous-titre">${texte("legendesTexte")}</p>
+      <ul class="grille">${cartesLegendes}</ul>
     </section>`;
-    bindSearchForm($("#heroSearch"));
-    $("#randomPlayer").addEventListener("click", (e) => {
+    activerRecherche("rechercheAccueil");
+    // Joueur au hasard parmi tous ceux de l'accueil
+    document.getElementById("lienHasard").addEventListener("click", function (e) {
         e.preventDefault();
-        location.hash = "joueur/" + RANDOM_POOL[Math.floor(Math.random() * RANDOM_POOL.length)];
+        const tous = JOUEURS_A_LA_UNE.concat(LEGENDES);
+        const auHasard = tous[Math.floor(Math.random() * tous.length)];
+        location.hash = "joueur-" + auHasard.id;
     });
-    // Date et heure en direct
-    const clock = $("#clock");
-    const tick = () => {
-        clock.textContent = capitalize(new Intl.DateTimeFormat(locale(), {
-            weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit"
-        }).format(new Date()));
-    };
-    tick();
-    clockTimer = window.setInterval(tick, 15000);
-    // Mise à jour discrète des cartes avec les données en ligne
-    FEATURED.forEach((f) => {
-        API.player(f.id, false, true).then(({ p }) => {
-            const card = document.querySelector(`[data-card="${f.id}"]`);
-            if (!p || !card || !card.parentElement)
-                return;
-            card.parentElement.outerHTML = playerCard({
-                id: f.id, name: p.strPlayer || f.name, team: p.strTeam || f.team,
-                nat: p.strNationality || f.nat, pos: p.strPosition || f.pos,
-                thumb: p.strThumb || f.thumb, born: p.dateBorn || f.born
-            });
-        }).catch(() => { });
+    // Horloge mise à jour toutes les secondes
+    mettreAJourHorloge();
+    horloge = setInterval(mettreAJourHorloge, 1000);
+}
+function mettreAJourHorloge() {
+    const zone = document.getElementById("horloge");
+    if (!zone)
+        return;
+    const maintenant = new Date();
+    const date = maintenant.toLocaleDateString(formatLangue(), { weekday: "long", day: "numeric", month: "long" });
+    const heure = maintenant.toLocaleTimeString(formatLangue(), { hour: "2-digit", minute: "2-digit" });
+    zone.textContent = date.charAt(0).toUpperCase() + date.slice(1) + " · " + heure;
+}
+// ---------- Recherche ----------
+// Branche un formulaire de recherche (celui de l'accueil ou celui du haut)
+function activerRecherche(idFormulaire) {
+    const formulaire = document.getElementById(idFormulaire);
+    formulaire.addEventListener("submit", function (e) {
+        e.preventDefault();
+        const champ = formulaire.querySelector("input");
+        const nom = champ.value.trim();
+        if (nom.length >= 2) {
+            location.hash = "recherche-" + encodeURIComponent(nom);
+            champ.blur();
+        }
     });
 }
-function renderLoading() {
-    main().innerHTML = `<div class="page"><div class="loader" role="status"><span></span>${esc(t("loading"))}</div></div>`;
-}
-function renderError(retry, msg) {
-    main().innerHTML = `
+async function afficherRecherche(nom) {
+    document.title = nom + " · " + texte("marque");
+    document.querySelector("#rechercheHaut input").value = nom;
+    contenu().innerHTML = `
     <div class="page">
-      <div class="empty">
-        <h1>${esc(msg || t("errorTitle"))}</h1>
-        ${msg ? "" : `<p>${esc(t("errorText"))}</p>`}
-        <button class="btn" type="button" id="retryBtn">${esc(t("retry"))}</button>
-        <a class="btn ghost" href="#">${esc(t("navHome"))}</a>
-      </div>
+      <a class="retour" href="#">← ${texte("retour")}</a>
+      <h1 class="titre-page">${texte("resultatsPour")} « ${proteger(nom)} »</h1>
+      <div id="resultats">${chargement()}</div>
     </div>`;
-    $("#retryBtn").addEventListener("click", retry);
-}
-function renderSearch(q) {
-    document.title = q + " · " + t("brand");
-    const topInput = $("#topSearch input");
-    topInput.value = q;
-    main().innerHTML = `
-    <div class="page">
-      <a class="back" href="#">← ${esc(t("back"))}</a>
-      <h1 class="page-title">${esc(t("results", { q }))}</h1>
-      <div id="results"><div class="loader" role="status"><span></span>${esc(t("searching"))}</div></div>
-    </div>`;
-    API.searchPlayers(q).then((list) => {
-        const box = $("#results");
-        if (!box)
-            return;
-        if (!list.length) {
-            box.innerHTML = `<p class="muted">${esc(t("noResults"))}</p>`;
+    try {
+        // L'API préfère les espaces remplacés par des "_"
+        const joueurs = await chercherJoueurs(nom.split(" ").join("_"));
+        const zone = document.getElementById("resultats");
+        if (!zone)
+            return; // on a changé de page entre-temps
+        if (joueurs.length === 0) {
+            zone.innerHTML = '<p class="discret">' + texte("aucunResultat") + "</p>";
             return;
         }
-        box.innerHTML = `<ul class="player-grid">${list.map((p) => playerCard({
-            id: p.idPlayer, name: p.strPlayer, team: p.strTeam, nat: p.strNationality,
-            pos: p.strPosition, thumb: p.strThumb, born: p.dateBorn
-        })).join("")}</ul>`;
-    }).catch(() => renderError(() => renderSearch(q)));
+        let cartes = "";
+        for (const j of joueurs) {
+            const estAncien = j.strStatus === "Retired" || j.strStatus === "Deceased";
+            cartes += carteJoueur({
+                id: j.idPlayer,
+                nom: j.strPlayer,
+                equipe: nomEquipe(j),
+                pays: j.strNationality,
+                poste: j.strPosition,
+                naissance: j.dateBorn || "",
+                photo: j.strThumb
+            }, estAncien);
+        }
+        zone.innerHTML = '<ul class="grille">' + cartes + "</ul>";
+    }
+    catch (erreur) {
+        afficherErreur(function () { afficherRecherche(nom); });
+    }
 }
-function resultLetter(e, teamId) {
-    if (e.intHomeScore == null || e.intAwayScore == null || e.intHomeScore === "" || e.intAwayScore === "")
-        return null;
-    const h = parseInt(e.intHomeScore, 10), a = parseInt(e.intAwayScore, 10);
-    const mine = e.idHomeTeam === teamId ? h : a;
-    const other = e.idHomeTeam === teamId ? a : h;
-    if (mine > other)
-        return { cls: "win", txt: t("win") };
-    if (mine < other)
-        return { cls: "loss", txt: t("loss") };
-    return { cls: "draw", txt: t("draw") };
-}
-function badge(url) {
-    return url ? `<img class="badge" src="${esc(url)}/tiny" data-full="${esc(url)}" alt="" width="28" height="28" loading="lazy">` : "";
-}
-function matchRow(e, teamId) {
-    const r = resultLetter(e, teamId);
-    return `
-    <li class="match">
-      <span class="pill ${r ? r.cls : ""}">${r ? esc(r.txt) : "–"}</span>
-      <span class="match-teams">
-        <span class="team">${badge(e.strHomeTeamBadge)}${esc(e.strHomeTeam)}</span>
-        <span class="score">${esc(e.intHomeScore ?? "")}&nbsp;–&nbsp;${esc(e.intAwayScore ?? "")}</span>
-        <span class="team away">${esc(e.strAwayTeam)}${badge(e.strAwayTeamBadge)}</span>
-      </span>
-      <span class="match-meta">${esc(e.strLeague || "")} · ${esc(formatEventDate(e, false))}</span>
-    </li>`;
-}
-function nextMatchHTML(e) {
-    return `
-    <div class="next">
-      <div class="next-teams">
-        <span class="next-team">${badge(e.strHomeTeamBadge)}<b>${esc(e.strHomeTeam)}</b></span>
-        <span class="next-vs">${esc(t("vs"))}</span>
-        <span class="next-team">${badge(e.strAwayTeamBadge)}<b>${esc(e.strAwayTeam)}</b></span>
-      </div>
-      <p class="next-when">${esc(formatEventDate(e, true))}</p>
-      <p class="muted">${esc(e.strLeague || "")}${e.strVenue ? " · " + esc(e.strVenue) : ""}</p>
-    </div>`;
-}
-function loadNews(p, force) {
-    const box = $("#news");
-    const teamId = p.idTeam;
-    if (!box || !teamId) {
-        if (box)
-            box.innerHTML = `<p class="muted">${esc(t("noLast"))}</p>`;
+// ---------- Fiche d'un joueur ----------
+async function afficherJoueur(id) {
+    contenu().innerHTML = '<div class="page">' + chargement() + "</div>";
+    let joueur;
+    try {
+        joueur = await infosJoueur(id);
+    }
+    catch (erreur) {
+        afficherErreur(function () { afficherJoueur(id); });
         return;
     }
-    Promise.all([API.lastEvents(teamId, force), API.nextEvents(teamId, force)]).then(([last, nxt]) => {
-        const target = $("#news");
-        if (!target)
-            return;
-        const time = (d) => (eventDate(d) || new Date(0)).getTime();
-        const past = last.list.slice().sort((a, b) => time(b) - time(a)).slice(0, 5);
-        const upcoming = nxt.list.slice().sort((a, b) => time(a) - time(b))[0];
-        const stamp = Math.min(last.t, nxt.t);
-        target.innerHTML = `
-      <div class="news-grid">
-        <div class="news-block">
-          <h3>${esc(t("nextMatch"))}</h3>
-          ${upcoming ? nextMatchHTML(upcoming) : `<p class="muted">${esc(t("noNext"))}</p>`}
+    if (!joueur) {
+        contenu().innerHTML = '<div class="page vide"><h1>' + texte("introuvable") + '</h1><a class="bouton" href="#">' + texte("accueil") + "</a></div>";
+        return;
+    }
+    document.title = joueur.strPlayer + " · " + texte("marque");
+    const age = calculerAge(joueur.dateBorn, joueur.dateDied);
+    const photo = joueur.strCutout || joueur.strRender || joueur.strThumb || "Images/joueur.svg";
+    // Tableau des informations : [titre, valeur]
+    const infos = [
+        [texte("club"), nomEquipe(joueur)],
+        [texte("nationalite"), nomPays(joueur.strNationality)],
+        [texte("poste"), nomPoste(joueur.strPosition)],
+        [texte("age"), age !== null ? age + " " + texte("ans") : "—"],
+        [texte("naissance"), formaterDate(joueur.dateBorn)],
+        [texte("lieuNaissance"), joueur.strBirthLocation || "—"],
+        [texte("taille"), tailleEnMetres(joueur.strHeight)],
+        [texte("poids"), poidsEnKg(joueur.strWeight)],
+        [texte("pied"), piedFort(joueur.strSide)],
+        [texte("statut"), statutJoueur(joueur)]
+    ];
+    if (joueur.dateDied) {
+        infos.splice(5, 0, [texte("deces"), formaterDate(joueur.dateDied)]);
+    }
+    if (joueur.strTeam2 && joueur.strTeam2 !== joueur.strTeam && joueur.strTeam2.charAt(0) !== "_") {
+        infos.splice(1, 0, [texte("selection"), joueur.strTeam2]);
+    }
+    let lignesInfos = "";
+    for (const info of infos) {
+        lignesInfos += "<div><dt>" + info[0] + "</dt><dd>" + proteger(info[1]) + "</dd></div>";
+    }
+    // Biographie en français si elle existe, sinon en anglais
+    let bio = joueur.strDescriptionEN || "";
+    let noteBio = "";
+    if (langue === "fr") {
+        if (joueur.strDescriptionFR) {
+            bio = joueur.strDescriptionFR;
+        }
+        else if (bio) {
+            noteBio = '<p class="note">' + texte("bioEnAnglais") + "</p>";
+        }
+    }
+    let paragraphes = "";
+    for (const morceau of bio.split("\n")) {
+        if (morceau.trim() !== "")
+            paragraphes += "<p>" + proteger(morceau) + "</p>";
+    }
+    contenu().innerHTML = `
+    <div class="page">
+      <a class="retour" href="#">← ${texte("retour")}</a>
+
+      <section class="profil">
+        <img class="profil-photo" src="${proteger(photo)}" alt="${proteger(joueur.strPlayer)}" onerror="this.src='Images/joueur.svg'">
+        <div>
+          <p class="surtitre">${proteger(nomEquipe(joueur))}${joueur.strNumber ? " · #" + proteger(joueur.strNumber) : ""}</p>
+          <h1>${proteger(joueur.strPlayer)}</h1>
+          <div class="etiquettes">
+            <span>${proteger(nomPoste(joueur.strPosition))}</span>
+            <span>${proteger(nomPays(joueur.strNationality))}</span>
+            ${age !== null ? "<span>" + age + " " + texte("ans") + "</span>" : ""}
+          </div>
         </div>
-        <div class="news-block">
-          <h3>${esc(t("lastMatches"))}</h3>
-          ${past.length ? `<ul class="matches">${past.map((e) => matchRow(e, teamId)).join("")}</ul>` : `<p class="muted">${esc(t("noLast"))}</p>`}
+      </section>
+
+      <section class="bloc">
+        <h2>${texte("actualite")}</h2>
+        <div id="actualite">${chargement()}</div>
+      </section>
+
+      <section class="bloc">
+        <dl class="infos">${lignesInfos}</dl>
+      </section>
+
+      ${bio ? `
+      <section class="bloc">
+        <h2>${texte("biographie")}</h2>
+        ${noteBio}
+        <div class="bio" id="bio">${paragraphes}</div>
+        <button class="bouton petit" type="button" id="boutonBio">${texte("lireSuite")}</button>
+      </section>` : ""}
+    </div>`;
+    // Bouton "Lire la suite" / "Réduire"
+    const boutonBio = document.getElementById("boutonBio");
+    if (boutonBio) {
+        boutonBio.addEventListener("click", function () {
+            const zoneBio = document.getElementById("bio");
+            zoneBio.classList.toggle("ouverte");
+            boutonBio.textContent = zoneBio.classList.contains("ouverte") ? texte("reduire") : texte("lireSuite");
+        });
+    }
+    afficherActualite(joueur);
+}
+// Prochain match et derniers résultats du club du joueur
+async function afficherActualite(joueur) {
+    const zone = document.getElementById("actualite");
+    if (!zone)
+        return;
+    // Un joueur retraité n'a pas de club, donc pas de matchs
+    if (!aUnClub(joueur)) {
+        zone.innerHTML = '<p class="discret">' + texte("pasDActualite") + "</p>";
+        return;
+    }
+    try {
+        const passes = await derniersMatchs(joueur.idTeam);
+        const aVenir = await prochainsMatchs(joueur.idTeam);
+        // Prochain match
+        let htmlProchain = '<p class="discret">' + texte("aucunMatch") + "</p>";
+        if (aVenir.length > 0) {
+            const m = aVenir[0];
+            htmlProchain = `
+        <div class="prochain">
+          <p><strong>${proteger(m.strHomeTeam)}</strong> ${texte("contre")} <strong>${proteger(m.strAwayTeam)}</strong></p>
+          <p class="prochain-date">${dateDuMatch(m)}</p>
+          <p class="discret">${proteger(m.strLeague)}${m.strVenue ? " · " + proteger(m.strVenue) : ""}</p>
+        </div>`;
+        }
+        // Derniers matchs (5 maximum)
+        let htmlPasses = "";
+        for (const m of passes.slice(0, 5)) {
+            htmlPasses += ligneMatch(m, joueur.idTeam);
+        }
+        if (htmlPasses === "") {
+            htmlPasses = '<p class="discret">' + texte("aucunResultatMatch") + "</p>";
+        }
+        else {
+            htmlPasses = '<ul class="matchs">' + htmlPasses + "</ul>";
+        }
+        const heure = new Date().toLocaleTimeString(formatLangue(), { hour: "2-digit", minute: "2-digit" });
+        zone.innerHTML = `
+      <div class="colonnes">
+        <div>
+          <h3>${texte("prochainMatch")}</h3>
+          ${htmlProchain}
+        </div>
+        <div>
+          <h3>${texte("derniersMatchs")}</h3>
+          ${htmlPasses}
         </div>
       </div>
-      <div class="news-foot">
-        <span class="muted">${esc(t("updated", { t: relativeTime(stamp) }))}</span>
-        <button class="btn small ghost" type="button" id="refreshNews">↻ ${esc(t("refresh"))}</button>
+      <div class="pied-actualite">
+        <span class="discret">${texte("misAJour")} ${heure}</span>
+        <button class="bouton petit" type="button" id="boutonActualiser">↻ ${texte("actualiser")}</button>
       </div>`;
-        $("#refreshNews").addEventListener("click", () => {
-            target.innerHTML = `<div class="loader" role="status"><span></span>${esc(t("loading"))}</div>`;
-            loadNews(p, true);
+        document.getElementById("boutonActualiser").addEventListener("click", function () {
+            oublierMatchs(joueur.idTeam);
+            zone.innerHTML = chargement();
+            afficherActualite(joueur);
         });
-    }).catch(() => {
-        const target = $("#news");
-        if (target)
-            target.innerHTML = `<p class="muted">${esc(t("errorText"))}</p>`;
-    });
+    }
+    catch (erreur) {
+        zone.innerHTML = '<p class="discret">' + texte("erreurTexte") + "</p>";
+    }
 }
-function renderPlayer(id) {
-    renderLoading();
-    API.player(id).then(({ p }) => {
-        if (location.hash !== "#joueur/" + id)
-            return; // l'utilisateur a changé de page
-        if (!p) {
-            renderError(() => renderPlayer(id), t("notFound"));
-            return;
-        }
-        document.title = p.strPlayer + " · " + t("brand");
-        const age = ageFrom(p.dateBorn);
-        const photo = p.strCutout || p.strRender || p.strThumb;
-        const bioFR = p.strDescriptionFR;
-        const bioEN = p.strDescriptionEN;
-        const bio = (lang === "fr" && bioFR) ? bioFR : (bioEN || bioFR || "");
-        const bioNote = lang === "fr" && !bioFR && bioEN ? t("bioEnOnly") : "";
-        const national = p.strTeam2 && p.strTeam2 !== p.strTeam ? p.strTeam2 : "";
-        const facts = [
-            [t("club"), p.strTeam || "—"],
-            [t("nationality"), (flag(p.strNationality) + " " + countryLabel(p.strNationality)).trim()],
-            [t("position"), positionLabel(p.strPosition)],
-            [t("age"), age !== null ? t("years", { n: age }) : "—"],
-            [t("born"), formatDate(p.dateBorn)],
-            [t("birthplace"), p.strBirthLocation || "—"],
-            [t("height"), (p.strHeight || "—").replace(/\s*\(.*\)/, "")],
-            [t("weight"), weightLabel(p.strWeight)],
-            [t("foot"), footLabel(p.strSide)],
-            [t("status"), statusLabel(p.strStatus)]
-        ];
-        if (national)
-            facts.splice(1, 0, [t("nationalTeam"), national]);
-        main().innerHTML = `
-      <div class="page">
-        <a class="back" href="javascript:history.length>1?history.back():location.assign('#')">← ${esc(t("back"))}</a>
-
-        <section class="profile">
-          <div class="profile-photo">
-            ${photo ? `<img src="${esc(photo)}" alt="${esc(p.strPlayer)}" width="420" height="420">` : `<span class="avatar-fallback big">${esc(initials(p.strPlayer))}</span>`}
-          </div>
-          <div class="profile-main">
-            <p class="kicker">${esc(p.strTeam || "")}${p.strNumber ? " · #" + esc(p.strNumber) : ""}</p>
-            <h1>${esc(p.strPlayer)}</h1>
-            <div class="chips">
-              <span class="chip">${esc(positionLabel(p.strPosition))}</span>
-              ${p.strNationality ? `<span class="chip">${flag(p.strNationality)} ${esc(countryLabel(p.strNationality))}</span>` : ""}
-              ${age !== null ? `<span class="chip">${esc(t("years", { n: age }))}</span>` : ""}
-            </div>
-          </div>
-        </section>
-
-        <section class="card">
-          <h2>${esc(t("news"))}</h2>
-          <div id="news"><div class="loader" role="status"><span></span>${esc(t("loading"))}</div></div>
-        </section>
-
-        <section class="card">
-          <dl class="facts">
-            ${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}
-          </dl>
-        </section>
-
-        ${bio ? `
-        <section class="card">
-          <h2>${esc(t("bio"))}</h2>
-          ${bioNote ? `<p class="note">${esc(bioNote)}</p>` : ""}
-          <div class="bio" id="bio">${bio.split(/\n+/).filter(Boolean).map((para) => `<p>${esc(para)}</p>`).join("")}</div>
-          <button class="btn small ghost" type="button" id="bioToggle">${esc(t("readMore"))}</button>
-        </section>` : ""}
-      </div>`;
-        const toggle = $("#bioToggle");
-        if (toggle) {
-            const bioEl = $("#bio");
-            if (bioEl.scrollHeight <= bioEl.clientHeight + 4)
-                toggle.remove();
-            toggle.addEventListener("click", () => {
-                const open = bioEl.classList.toggle("open");
-                toggle.textContent = open ? t("readLess") : t("readMore");
-            });
-        }
-        loadNews(p, false);
-    }).catch(() => renderError(() => renderPlayer(id)));
+// Une ligne de résultat : V / N / D + score
+function ligneMatch(match, idEquipe) {
+    const butsDomicile = Number(match.intHomeScore);
+    const butsExterieur = Number(match.intAwayScore);
+    const aDomicile = match.idHomeTeam === idEquipe;
+    const nosButs = aDomicile ? butsDomicile : butsExterieur;
+    const leursButs = aDomicile ? butsExterieur : butsDomicile;
+    let lettre = texte("nul");
+    let classe = "nul";
+    if (nosButs > leursButs) {
+        lettre = texte("victoire");
+        classe = "victoire";
+    }
+    if (nosButs < leursButs) {
+        lettre = texte("defaite");
+        classe = "defaite";
+    }
+    return `
+    <li>
+      <span class="resultat ${classe}">${lettre}</span>
+      <span>
+        <strong>${proteger(match.strHomeTeam)} ${butsDomicile} – ${butsExterieur} ${proteger(match.strAwayTeam)}</strong>
+        <small class="discret">${proteger(match.strLeague)} · ${dateDuMatch(match)}</small>
+      </span>
+    </li>`;
 }
-/* ---------- Routeur ---------- */
-function route() {
-    window.clearInterval(clockTimer);
-    document.body.classList.remove("is-home");
-    const hash = decodeURIComponent(location.hash.replace(/^#\/?/, ""));
-    const [view, ...rest] = hash.split("/");
-    const arg = rest.join("/");
-    if (view === "joueur" && /^\d+$/.test(arg))
-        renderPlayer(arg);
-    else if (view === "recherche" && arg)
-        renderSearch(arg);
-    else
-        renderHome();
+// ---------- Message d'erreur ----------
+function afficherErreur(reessayer) {
+    contenu().innerHTML = `
+    <div class="page vide">
+      <h1>${texte("erreur")}</h1>
+      <p class="discret">${texte("erreurTexte")}</p>
+      <button class="bouton" type="button" id="boutonReessayer">${texte("reessayer")}</button>
+    </div>`;
+    document.getElementById("boutonReessayer").addEventListener("click", reessayer);
+}
+// ---------- Paramètres : thème et langue ----------
+function appliquerTheme(choix) {
+    theme = choix;
+    sauverPreference("theme", choix);
+    if (choix === "auto") {
+        document.documentElement.removeAttribute("data-theme");
+    }
+    else {
+        document.documentElement.setAttribute("data-theme", choix);
+    }
+}
+function appliquerLangue(choix) {
+    langue = choix;
+    sauverPreference("langue", choix);
+    document.documentElement.lang = choix;
+    // Tous les éléments fixes qui ont un attribut data-texte="cle"
+    const elements = document.querySelectorAll("[data-texte]");
+    for (const element of Array.from(elements)) {
+        element.textContent = texte(element.getAttribute("data-texte"));
+    }
+    const champHaut = document.querySelector("#rechercheHaut input");
+    champHaut.placeholder = texte("placeholder");
+}
+function ouvrirParametres() {
+    // On coche les bons boutons avant d'ouvrir
+    document.querySelector('input[name="theme"][value="' + theme + '"]').checked = true;
+    document.querySelector('input[name="langue"][value="' + langue + '"]').checked = true;
+    document.getElementById("parametres").classList.add("ouvert");
+    document.getElementById("fond").classList.add("ouvert");
+}
+function fermerParametres() {
+    document.getElementById("parametres").classList.remove("ouvert");
+    document.getElementById("fond").classList.remove("ouvert");
+}
+function activerParametres() {
+    document.getElementById("boutonParametres").addEventListener("click", ouvrirParametres);
+    document.getElementById("boutonFermer").addEventListener("click", fermerParametres);
+    document.getElementById("fond").addEventListener("click", fermerParametres);
+    // Quand on clique sur un choix de thème
+    const choixTheme = document.querySelectorAll('input[name="theme"]');
+    for (const choix of Array.from(choixTheme)) {
+        choix.addEventListener("change", function () {
+            appliquerTheme(choix.value);
+        });
+    }
+    // Quand on clique sur un choix de langue
+    const choixLangue = document.querySelectorAll('input[name="langue"]');
+    for (const choix of Array.from(choixLangue)) {
+        choix.addEventListener("change", function () {
+            appliquerLangue(choix.value);
+            afficherPage(); // on réaffiche la page dans la nouvelle langue
+        });
+    }
+}
+// ---------- Choix de la page à afficher ----------
+function contenu() {
+    return document.getElementById("contenu");
+}
+function afficherPage() {
+    clearInterval(horloge);
+    document.body.classList.remove("accueil");
     window.scrollTo(0, 0);
+    const adresse = decodeURIComponent(location.hash);
+    if (adresse.startsWith("#joueur-")) {
+        afficherJoueur(adresse.replace("#joueur-", ""));
+    }
+    else if (adresse.startsWith("#recherche-")) {
+        afficherRecherche(adresse.replace("#recherche-", ""));
+    }
+    else {
+        afficherAccueil();
+    }
 }
-/* ---------- Démarrage ---------- */
-document.addEventListener("DOMContentLoaded", () => {
-    applyTheme(theme);
-    applyLang(lang);
-    setupSettings();
-    setupStatus();
-    bindSearchForm($("#topSearch"));
-    window.addEventListener("hashchange", route);
-    route();
+// ---------- Démarrage du site ----------
+document.addEventListener("DOMContentLoaded", function () {
+    appliquerTheme(theme);
+    appliquerLangue(langue);
+    activerParametres();
+    activerRecherche("rechercheHaut");
+    afficherPage();
 });
+// Quand l'adresse change (clic sur un lien #...), on change de page
+window.addEventListener("hashchange", afficherPage);

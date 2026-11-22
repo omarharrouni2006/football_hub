@@ -1,117 +1,105 @@
 # ⚽ Planète Foot
 
-**Planète Foot** regroupe les infos et l'actualité des footballeurs du monde entier, de façon simple et tranquille.
+**Planète Foot** est un site qui regroupe les infos et l'actualité des footballeurs du monde entier, d'aujourd'hui et d'hier.
 Il marche sur ordinateur **et** sur téléphone.
 
----
-
-## ✨ Fonctionnalités
-
-| | |
-|---|---|
-| 🔎 **Recherche** | Trouve n'importe quel joueur, de n'importe quel championnat |
-| 🧾 **Fiche joueur** | Club, sélection, nationalité, poste, âge, taille, poids, pied fort, biographie |
-| 📰 **Actualité** | Prochain match et derniers résultats de son club, mis à jour automatiquement |
-| ⭐ **À la une** | Les joueurs les plus suivis du moment, sur la page d'accueil |
-| 🎲 **Au hasard** | Un bouton pour découvrir un joueur au hasard |
-| 🌗 **Thème** | Clair, Sombre ou Auto (suit le réglage du téléphone ou de l'ordinateur) |
-| 🌍 **Langue** | Français ou English |
-| 📱 **Mobile** | Mise en page adaptée au téléphone, installable sur l'écran d'accueil |
-| ✉️ **Contact** | Les deux adresses mail en bas de chaque page |
-
-Le site retient le thème et la langue choisis.
+🔗 **Voir le site en ligne : https://omarharrouni2006.github.io/football_hub/**
 
 ---
 
-## 🚀 Ouvrir le site
+## ✨ Ce que fait le site
 
-### Sur l'ordinateur
-Double-clique sur **`index.html`**. Le site s'ouvre dans le navigateur.
-
-### Depuis VS Code
-1. Ouvre le dossier `Planete_Foot` dans VS Code.
-2. Installe l'extension **Live Server** (VS Code la propose automatiquement).
-3. Clic droit sur `index.html` → **Open with Live Server**.
-
-### Sur le téléphone
-1. L'ordinateur et le téléphone doivent être sur le **même Wi-Fi**.
-2. Dans le terminal, lance :
-   ```bash
-   cd ~/Desktop/Planete_Foot
-   python3 -m http.server 5500
-   ```
-3. Sur le téléphone, ouvre `http://<adresse-IP-de-l-ordinateur>:5500`
-   (sur Mac, l'adresse IP se trouve avec `ipconfig getifaddr en0`).
-4. Sur iPhone : **Partager → Sur l'écran d'accueil**.
-   Sur Android : **⋮ → Ajouter à l'écran d'accueil**.
-5. Pour arrêter le serveur : `Ctrl + C` dans le terminal.
+- 🔎 **Recherche** : on tape le nom de n'importe quel joueur (actuel ou ancien).
+- 🧾 **Fiche joueur** : club, sélection, nationalité, poste, âge, taille, poids, pied fort, biographie.
+- 📰 **Actualité** : prochain match et derniers résultats du club du joueur.
+- ⭐ **À la une** : les joueurs actuels les plus suivis.
+- 🏆 **Légendes** : les anciens joueurs (Zidane, Maradona, Henry, Cruyff…).
+- 🎲 **Au hasard** : un bouton pour découvrir un joueur au hasard.
+- 🌗 **Thème** : Clair, Sombre ou Auto.
+- 🌍 **Langue** : Français ou English.
+- 📱 **Téléphone** : la page s'adapte à la taille de l'écran.
+- ✉️ **Contact** : les deux adresses mail en bas de page.
 
 ---
 
-## ⚙️ Paramètres
-
-Clique sur la roue ⚙️ en haut à droite :
-
-- **Thème** : ☀️ Clair · 🌙 Sombre · ⚙️ Auto
-- **Langue** : 🇫🇷 Français · 🇬🇧 English
-
-Sur téléphone, le panneau monte depuis le bas de l'écran.
-
----
-
-## 🗂️ Organisation du projet
+## 🗂️ Organisation des fichiers
 
 ```
 Planete_Foot/
-├── index.html               page unique du site
-├── manifest.webmanifest     installation sur téléphone
+├── index.html              la page du site (une seule page)
 ├── Styles/
-│   └── main_style.css       thème clair / sombre, adapté au mobile
+│   └── main_style.css      les couleurs et la mise en page
 ├── Code/
-│   ├── Typescript/          ✏️ code source (à modifier ici)
-│   │   ├── i18n.ts          textes FR / EN, postes, pays
-│   │   ├── api.ts           accès aux données (cache + file d'attente)
-│   │   └── app.ts           pages, recherche, paramètres
-│   └── Javascript/          ⚙️ généré automatiquement (ne pas modifier)
-├── Images/
-│   └── icon.svg             icône du site
-├── package.json             scripts npm
-├── tsconfig.json            configuration TypeScript
-└── .vscode/                 réglages VS Code (compilation, extensions)
+│   ├── Typescript/         le code qu'on écrit
+│   │   ├── traductions.ts  les textes en français et en anglais
+│   │   ├── donnees.ts      les joueurs de la page d'accueil
+│   │   ├── api.ts          la récupération des données sur Internet
+│   │   └── app.ts          le fonctionnement des pages
+│   └── Javascript/         créé automatiquement à partir du TypeScript
+├── Images/                 l'icône du site et l'image par défaut
+├── package.json            pour installer TypeScript
+└── tsconfig.json           réglages de TypeScript
 ```
 
 ---
 
-## 🛠️ Modifier le code (TypeScript)
+## 🎤 Comment ça marche (pour la présentation)
 
-Le code est écrit en **TypeScript** dans `Code/Typescript/`, puis compilé en JavaScript dans `Code/Javascript/`.
+1. **Une seule page HTML.** `index.html` contient la barre du haut, le pied de page et la fenêtre des paramètres.
+   Le milieu (`<main id="contenu">`) est rempli par le code TypeScript.
+
+2. **Le `#` dans l'adresse décide de la page affichée** (fonction `afficherPage()` dans `app.ts`) :
+   - `index.html` → page d'accueil
+   - `index.html#recherche-messi` → résultats de recherche
+   - `index.html#joueur-34146370` → fiche de Messi
+
+3. **Les données viennent d'Internet** grâce à l'API gratuite **TheSportsDB** (`api.ts`) :
+   - on utilise `fetch()` avec `async` / `await` pour attendre la réponse ;
+   - les réponses sont gardées 30 minutes dans le `localStorage`, car l'API gratuite limite le nombre de demandes.
+
+4. **Les joueurs de l'accueil sont écrits à la main** dans `donnees.ts`, pour que l'accueil s'affiche tout de suite.
+
+5. **Thème clair / sombre** : les couleurs sont des variables CSS (`--texte`, `--fond-page`…).
+   Le thème sombre change seulement la valeur de ces variables (`main_style.css`).
+
+6. **Deux langues** : tous les textes sont dans `traductions.ts`. La fonction `texte("cle")` renvoie le texte dans la langue choisie.
+
+7. **Les choix sont retenus** : le thème et la langue sont enregistrés dans le `localStorage`.
+
+---
+
+## 🚀 Ouvrir le site sur son ordinateur
+
+- Double-cliquer sur **`index.html`**.
+- Ou dans VS Code : installer l'extension **Live Server**, puis clic droit sur `index.html` → **Open with Live Server**.
+
+---
+
+## 🛠️ Modifier le code
+
+Le code s'écrit en **TypeScript** dans `Code/Typescript/`, puis il est transformé en JavaScript dans `Code/Javascript/`.
 
 ```bash
-npm install        # une seule fois, installe TypeScript
-npm run build      # compile une fois
-npm run watch      # recompile à chaque sauvegarde
+npm install      # une seule fois : installe TypeScript
+npm run build    # transforme le TypeScript en JavaScript
+npm run watch    # le refait automatiquement à chaque sauvegarde
 ```
 
-Dans VS Code : **`Cmd + Shift + B`** (Mac) ou **`Ctrl + Shift + B`** (Windows) lance la compilation.
+Dans VS Code : **`Cmd + Shift + B`** (Mac) ou **`Ctrl + Shift + B`** (Windows).
 
-> ⚠️ Ne modifie pas les fichiers de `Code/Javascript/` : ils sont écrasés à chaque compilation.
+> ⚠️ Ne pas modifier les fichiers de `Code/Javascript/` : ils sont remplacés à chaque compilation.
 
-### Exemples de modifications
-- **Changer les joueurs à la une** : liste `FEATURED` dans `Code/Typescript/app.ts`.
-- **Changer un texte** : dictionnaires `fr` et `en` dans `Code/Typescript/i18n.ts`.
-- **Changer les couleurs** : variables en haut de `Styles/main_style.css`
-  (`--accent`, `--paper`…, une fois pour le clair et une fois pour le sombre).
+Exemples :
+- **Ajouter un joueur sur l'accueil** : ajouter une ligne dans `JOUEURS_A_LA_UNE` ou `LEGENDES` (`donnees.ts`).
+- **Changer un texte** : dans `traductions.ts`.
+- **Changer les couleurs** : les variables en haut de `main_style.css`.
 
 ---
 
 ## 📡 Données
 
-Les données des joueurs et des matchs viennent de **[TheSportsDB](https://www.thesportsdb.com)** (clé gratuite).
-
-- La clé gratuite limite le nombre de requêtes par minute. Le site garde donc les réponses en mémoire et espace ses appels.
-- Si la limite est atteinte, un petit message s'affiche et le site réessaie tout seul.
-- La biographie s'affiche en français quand elle existe en français, sinon en anglais.
-- Une connexion Internet est nécessaire pour charger les données.
+Les données viennent de **[TheSportsDB](https://www.thesportsdb.com)** (clé gratuite `123`).
+La clé gratuite limite le nombre de demandes par minute : si un message d'erreur s'affiche, il suffit d'attendre une minute.
 
 ---
 

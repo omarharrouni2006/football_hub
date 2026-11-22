@@ -1,158 +1,84 @@
 "use strict";
-/* Accès aux données TheSportsDB : file d'attente, cache et nouvelles tentatives.
-   La clé gratuite limite le nombre de requêtes par minute : on espace les appels
-   et on garde les réponses en cache pour que le site reste fluide. */
-const API = (() => {
-    const BASE = "https://www.thesportsdb.com/api/v1/json/123/";
-    const MIN_GAP = 2100; // ms entre deux requêtes (~28 / minute)
-    const CACHE_PREFIX = "pf-cache:";
-    const MIN = 60 * 1000;
-    const HOUR = 60 * MIN;
-    const queue = [];
-    const memory = {};
-    const listeners = [];
-    let running = false;
-    let lastCall = 0;
-    function notify(state) {
-        listeners.forEach((fn) => { try {
-            fn(state);
+// =============================================
+//  Récupération des données sur TheSportsDB
+// =============================================
+// "123" est la clé gratuite de l'API.
+// Elle limite le nombre de demandes par minute, donc on garde
+// les réponses en mémoire (localStorage) pendant 30 minutes.
+const ADRESSE_API = "https://www.thesportsdb.com/api/v1/json/123/";
+const DUREE_CACHE = 30 * 60 * 1000; // 30 minutes en millisecondes
+// Télécharge une adresse de l'API et renvoie le résultat (objet JSON)
+async function chargerDonnees(chemin) {
+    const cle = "cache-" + chemin;
+    // 1. Si on a déjà la réponse récente en mémoire, on la réutilise
+    const enMemoire = lireMemoire(cle);
+    if (enMemoire && Date.now() - enMemoire.date < DUREE_CACHE) {
+        return enMemoire.donnees;
+    }
+    // 2. Sinon on demande à l'API
+    try {
+        const reponse = await fetch(ADRESSE_API + chemin);
+        const donnees = await reponse.json();
+        ecrireMemoire(cle, { date: Date.now(), donnees: donnees });
+        return donnees;
+    }
+    catch (erreur) {
+        // 3. Si l'API ne répond pas, on prend l'ancienne réponse si on en a une
+        if (enMemoire) {
+            return enMemoire.donnees;
         }
-        catch (e) { /* ignore */ } });
+        throw erreur;
     }
-    function readCache(key, maxAge) {
-        let entry = memory[key];
-        if (!entry) {
-            try {
-                const raw = localStorage.getItem(CACHE_PREFIX + key);
-                if (raw)
-                    entry = memory[key] = JSON.parse(raw);
-            }
-            catch (e) { /* stockage indisponible */ }
-        }
-        return entry && Date.now() - entry.t < maxAge ? entry : null;
+}
+// Petites fonctions pour le localStorage (il peut être bloqué, d'où le try)
+function lireMemoire(cle) {
+    try {
+        const texte = localStorage.getItem(cle);
+        return texte ? JSON.parse(texte) : null;
     }
-    function writeCache(key, data) {
-        const entry = { t: Date.now(), d: data };
-        memory[key] = entry;
-        try {
-            localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(entry));
-        }
-        catch (e) {
-            // Stockage plein : on vide l'ancien cache
-            try {
-                Object.keys(localStorage)
-                    .filter((k) => k.indexOf(CACHE_PREFIX) === 0)
-                    .forEach((k) => localStorage.removeItem(k));
-            }
-            catch (e2) { /* ignore */ }
-        }
-        return entry;
+    catch (e) {
+        return null;
     }
-    function pump() {
-        if (running || !queue.length)
-            return;
-        running = true;
-        const wait = Math.max(0, lastCall + MIN_GAP - Date.now());
-        setTimeout(() => {
-            const job = queue.shift();
-            lastCall = Date.now();
-            attempt(job, 0);
-        }, wait);
+}
+function ecrireMemoire(cle, valeur) {
+    try {
+        localStorage.setItem(cle, JSON.stringify(valeur));
     }
-    function next() {
-        running = false;
-        pump();
+    catch (e) {
+        // pas grave si ça ne marche pas
     }
-    function attempt(job, tries) {
-        fetch(BASE + job.path)
-            .then((res) => {
-            if (res.status === 429)
-                throw new Error("rate");
-            if (!res.ok)
-                throw new Error("HTTP " + res.status);
-            return res.text();
-        })
-            .then((txt) => {
-            let data;
-            try {
-                data = JSON.parse(txt);
-            }
-            catch (e) {
-                throw new Error("rate");
-            }
-            notify("ok");
-            job.resolve(writeCache(job.path, data));
-            next();
-        })
-            .catch((err) => {
-            // Limite atteinte (Cloudflare renvoie une page sans CORS => erreur réseau)
-            if (tries < 3) {
-                notify("rate");
-                setTimeout(() => { lastCall = Date.now(); attempt(job, tries + 1); }, 6000 * (tries + 1));
-            }
-            else {
-                notify("error");
-                job.reject(err);
-                next();
-            }
-        });
+}
+// ---------- Les 4 demandes utilisées par le site ----------
+// Cherche des joueurs par leur nom
+async function chercherJoueurs(nom) {
+    const donnees = await chargerDonnees("searchplayers.php?p=" + encodeURIComponent(nom));
+    const liste = donnees.player || [];
+    // On garde seulement les footballeurs (l'API contient aussi d'autres sports)
+    return liste.filter((joueur) => joueur.strSport === "Soccer");
+}
+// Toutes les infos d'un joueur
+async function infosJoueur(id) {
+    const donnees = await chargerDonnees("lookupplayer.php?id=" + id);
+    const liste = donnees.players || [];
+    return liste[0] || null;
+}
+// Derniers matchs d'une équipe
+async function derniersMatchs(idEquipe) {
+    const donnees = await chargerDonnees("eventslast.php?id=" + idEquipe);
+    return donnees.results || [];
+}
+// Prochains matchs d'une équipe
+async function prochainsMatchs(idEquipe) {
+    const donnees = await chargerDonnees("eventsnext.php?id=" + idEquipe);
+    return donnees.events || [];
+}
+// Vide le cache d'une équipe (pour le bouton "Actualiser")
+function oublierMatchs(idEquipe) {
+    try {
+        localStorage.removeItem("cache-eventslast.php?id=" + idEquipe);
+        localStorage.removeItem("cache-eventsnext.php?id=" + idEquipe);
     }
-    function get(path, maxAge, force = false, priority = false) {
-        if (!force) {
-            const cached = readCache(path, maxAge);
-            if (cached)
-                return Promise.resolve(cached);
-        }
-        const existing = queue.find((j) => j.path === path);
-        if (existing)
-            return existing.promise;
-        const job = { path };
-        job.promise = new Promise((resolve, reject) => {
-            job.resolve = resolve;
-            job.reject = (e) => {
-                // En cas d'échec, on se rabat sur un cache même ancien
-                const stale = readCache(path, Infinity);
-                if (stale)
-                    resolve(stale);
-                else
-                    reject(e);
-            };
-        });
-        if (priority)
-            queue.unshift(job);
-        else
-            queue.push(job);
-        pump();
-        return job.promise;
+    catch (e) {
+        // rien
     }
-    return {
-        onStatus(fn) { listeners.push(fn); },
-        searchPlayers(q) {
-            const path = "searchplayers.php?p=" + encodeURIComponent(q.trim().replace(/\s+/g, "_"));
-            return get(path, 6 * HOUR, false, true).then((r) => {
-                const d = r.d;
-                const list = ((d && (d.player || d.players)) || []);
-                return list.filter((p) => p.strSport === "Soccer");
-            });
-        },
-        player(id, force = false, background = false) {
-            return get("lookupplayer.php?id=" + id, 6 * HOUR, force, !background).then((r) => {
-                const d = r.d;
-                const list = ((d && (d.players || d.player)) || []);
-                return { t: r.t, p: list[0] || null };
-            });
-        },
-        lastEvents(teamId, force = false) {
-            return get("eventslast.php?id=" + teamId, 20 * MIN, force, true).then((r) => {
-                const d = r.d;
-                return { t: r.t, list: ((d && d.results) || []) };
-            });
-        },
-        nextEvents(teamId, force = false) {
-            return get("eventsnext.php?id=" + teamId, 20 * MIN, force, true).then((r) => {
-                const d = r.d;
-                return { t: r.t, list: ((d && d.events) || []) };
-            });
-        }
-    };
-})();
+}
