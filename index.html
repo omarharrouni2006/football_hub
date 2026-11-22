@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Planète Foot</title>
+  <meta name="description" content="Les infos et l'actualité de tous les footballeurs du monde.">
+  <meta name="theme-color" content="#101827">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Planète Foot">
+  <link rel="icon" href="Images/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="Images/icon.svg">
+  <link rel="manifest" href="manifest.webmanifest">
+  <script>
+    /* Applique le thème avant l'affichage (évite le flash blanc) */
+    (function () {
+      try {
+        var t = localStorage.getItem("pf-theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+        var l = localStorage.getItem("pf-lang");
+        if (l === "en") document.documentElement.lang = "en";
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="Styles/main_style.css">
+</head>
+<body>
+  <a class="skip" href="#main" data-i18n="navHome">Accueil</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#" aria-label="Planète Foot">
+        <img src="Images/icon.svg" alt="" width="30" height="30">
+        <span data-i18n="brand">Planète Foot</span>
+      </a>
+      <form class="top-search" id="topSearch" role="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="search" name="q" autocomplete="off" data-i18n-placeholder="searchPlaceholder" aria-label="Rechercher">
+      </form>
+      <button class="icon-btn" id="openSettings" type="button" data-i18n-aria="settings" aria-label="Paramètres">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="status-toast" id="statusToast" role="status" aria-live="polite" hidden></div>
+
+  <main id="main" tabindex="-1"></main>
+
+  <footer class="footer" id="contact">
+    <div class="footer-inner">
+      <div>
+        <h2 data-i18n="contact">Nous contacter</h2>
+        <p data-i18n="contactText">Une question, une idée, un joueur manquant ? Écris-nous.</p>
+      </div>
+      <ul class="mails">
+        <li><a href="mailto:samar.ochi@epitech.eu">samar.ochi@epitech.eu</a></li>
+        <li><a href="mailto:omar.harrouni2006@gmail.com">omar.harrouni2006@gmail.com</a></li>
+      </ul>
+    </div>
+    <p class="credit" data-i18n="dataCredit">Données joueurs et matchs : TheSportsDB.</p>
+  </footer>
+
+  <!-- Paramètres -->
+  <div class="sheet-backdrop" id="settingsBackdrop" hidden></div>
+  <section class="sheet" id="settings" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden>
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <h2 id="settingsTitle" data-i18n="settings">Paramètres</h2>
+      <button class="icon-btn" id="closeSettings" type="button" data-i18n-aria="close" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+
+    <fieldset class="setting">
+      <legend data-i18n="theme">Thème</legend>
+      <div class="segmented" role="radiogroup">
+        <label><input type="radio" name="theme" value="light"><span>☀️ <b data-i18n="themeLight">Clair</b></span></label>
+        <label><input type="radio" name="theme" value="dark"><span>🌙 <b data-i18n="themeDark">Sombre</b></span></label>
+        <label><input type="radio" name="theme" value="auto"><span>⚙️ <b data-i18n="themeAuto">Auto</b></span></label>
+      </div>
+    </fieldset>
+
+    <fieldset class="setting">
+      <legend data-i18n="language">Langue</legend>
+      <div class="segmented" role="radiogroup">
+        <label><input type="radio" name="lang" value="fr"><span>🇫🇷 <b>Français</b></span></label>
+        <label><input type="radio" name="lang" value="en"><span>🇬🇧 <b>English</b></span></label>
+      </div>
+    </fieldset>
+  </section>
+
+  <script src="Code/Javascript/i18n.js"></script>
+  <script src="Code/Javascript/api.js"></script>
+  <script src="Code/Javascript/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "none",
+    "rootDir": "Code/Typescript",
+    "outDir": "Code/Javascript",
+    "strict": true,
+    "noImplicitReturns": true,
+    "removeComments": false,
+    "sourceMap": false
+  },
+  "include": ["Code/Typescript/**/*.ts"]
+}

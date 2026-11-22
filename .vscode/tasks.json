@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Compiler TypeScript",
+      "type": "npm",
+      "script": "build",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "TypeScript en continu (watch)",
+      "type": "npm",
+      "script": "watch",
+      "isBackground": true,
+      "problemMatcher": ["$tsc-watch"]
+    }
+  ]
+}

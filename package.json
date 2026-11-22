@@ -1,0 +1,13 @@
+{
+  "name": "planete-foot",
+  "version": "2.0.0",
+  "description": "Les infos et l'actualité de tous les footballeurs du monde.",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}
